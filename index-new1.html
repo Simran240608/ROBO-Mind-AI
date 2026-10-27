@@ -1,0 +1,588 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>RoboMind AI - Rescue Simulator</title>
+
+<style>
+:root {
+  --bg: #0b1220;
+  --panel: #131d30;
+  --panel-2: #0e1727;
+  --line: #26364f;
+  --text: #eef4ff;
+  --muted: #8fa2bd;
+  --mint: #65e5c0;
+  --amber: #f0b13a;
+  --rose: #ed596e;
+  --sky: #53c9ec;
+  --cell: #22304a;
+  --radius: 14px;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  padding: 28px 20px 40px;
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
+  background:
+    radial-gradient(900px 400px at 50% -120px, #14284a 0%, transparent 70%),
+    var(--bg);
+  color: var(--text);
+  line-height: 1.5;
+}
+
+header {
+  text-align: center;
+  margin: 0 auto 28px;
+  max-width: 640px;
+}
+
+h1 {
+  font-size: clamp(1.8rem, 5vw, 2.6rem);
+  letter-spacing: -0.02em;
+  margin: 0 0 6px;
+  color: var(--text);
+}
+
+h1 span { color: var(--mint); }
+
+.subtitle { color: var(--muted); margin: 0; }
+
+h2 {
+  font-size: 1.05rem;
+  margin: 0 0 4px;
+}
+
+.layout {
+  max-width: 980px;
+  margin: 0 auto;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 280px;
+  gap: 20px;
+  align-items: start;
+}
+
+.panel {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 20px;
+}
+
+.hint { color: var(--muted); font-size: 0.9rem; margin: 0 0 16px; }
+
+/* Grid */
+#grid {
+  display: grid;
+  grid-template-columns: repeat(10, minmax(0, 1fr));
+  gap: 5px;
+  padding: 10px;
+  background: var(--panel-2);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+}
+
+.cell {
+  aspect-ratio: 1;
+  min-width: 0;
+  display: grid;
+  place-items: center;
+  border-radius: 6px;
+  background: var(--cell);
+  cursor: pointer;
+  font-weight: 700;
+  font-size: clamp(11px, 2.4vw, 20px);
+  transition: background 0.15s, transform 0.1s;
+  user-select: none;
+}
+
+.cell:hover { background: #2d3f5f; }
+.cell:active { transform: scale(0.94); }
+.cell:focus-visible, button:focus-visible {
+  outline: 3px solid var(--amber);
+  outline-offset: 2px;
+}
+
+.seen { background: #2e4d70; }
+.seen:hover { background: #38608c; }
+.start { background: #159b76; color: #04231b; cursor: default; }
+.goal  { background: var(--amber); color: #2a1c00; cursor: default; }
+.start:hover { background: #159b76; }
+.goal:hover  { background: var(--amber); }
+.wall { background: var(--rose); }
+.wall:hover { background: #f06f82; }
+.path { background: var(--sky); color: #071321; }
+.path:hover { background: #6fd3f1; }
+.robot {
+  box-shadow: inset 0 0 0 3px #fff;
+  background: #1c5f78;
+}
+.robot.goal { background: var(--amber); }
+
+/* Stats */
+.stats {
+  display: grid;
+  gap: 10px;
+  margin: 16px 0;
+}
+
+.stat-card {
+  padding: 12px 14px;
+  border-radius: 10px;
+  background: var(--panel-2);
+  border: 1px solid var(--line);
+}
+
+.stat-card span {
+  display: block;
+  color: var(--muted);
+  font-size: 0.8rem;
+  margin-bottom: 2px;
+}
+
+.stat-card strong {
+  color: var(--mint);
+  font-size: 1.35rem;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Buttons */
+.actions { display: grid; gap: 8px; }
+
+button {
+  width: 100%;
+  border: 1px solid transparent;
+  border-radius: 10px;
+  padding: 12px 10px;
+  cursor: pointer;
+  font: inherit;
+  font-weight: 700;
+  background: var(--mint);
+  color: #06201a;
+  transition: filter 0.15s, transform 0.1s;
+}
+
+button:hover { filter: brightness(1.08); }
+button:active { transform: translateY(1px); }
+
+button.secondary {
+  background: transparent;
+  color: var(--text);
+  border-color: #3a4c6a;
+}
+
+button.secondary:hover { background: #1b2a43; filter: none; }
+
+button.running { background: var(--amber); color: #2a1c00; }
+
+/* Status */
+#status {
+  margin-top: 16px;
+  padding: 12px 14px;
+  background: var(--panel-2);
+  border: 1px solid var(--line);
+  border-left: 4px solid var(--mint);
+  border-radius: 8px;
+  font-size: 0.9rem;
+}
+
+#status.error { border-left-color: var(--rose); }
+#status.success { border-left-color: var(--amber); }
+
+/* Legend */
+.legend {
+  margin-top: 18px;
+  padding-top: 16px;
+  border-top: 1px solid var(--line);
+  display: grid;
+  gap: 8px;
+  color: #c9d6e9;
+  font-size: 0.85rem;
+}
+
+.legend div { display: flex; align-items: center; gap: 10px; }
+
+.legend i {
+  width: 16px;
+  height: 16px;
+  border-radius: 4px;
+  display: inline-block;
+  flex: none;
+}
+
+@media (max-width: 760px) {
+  .layout { grid-template-columns: 1fr; }
+  body { padding: 18px 12px 32px; }
+  .panel { padding: 16px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * { transition: none !important; }
+}
+</style>
+</head>
+
+<body>
+<header>
+  <h1>🤖 Robo<span>Mind</span> AI</h1>
+  <p class="subtitle">Autonomous disaster rescue simulator</p>
+</header>
+
+<main class="layout">
+  <section class="panel">
+    <h2>Rescue mission grid</h2>
+    <p class="hint">Select a cell to add or remove an obstacle.</p>
+    <div id="grid"></div>
+  </section>
+
+  <aside class="panel">
+    <h2>Mission dashboard</h2>
+    <div class="stats">
+      <div class="stat-card">
+        <span>Robot position</span>
+        <strong id="robotPos">Start</strong>
+      </div>
+      <div class="stat-card">
+        <span>Total distance</span>
+        <strong id="distance">--</strong>
+      </div>
+      <div class="stat-card">
+        <span>Steps remaining</span>
+        <strong id="remaining">--</strong>
+      </div>
+      <div class="stat-card">
+        <span>Cells checked by A*</span>
+        <strong id="checked">--</strong>
+      </div>
+    </div>
+
+    <div class="actions">
+      <button id="find">Find shortest path</button>
+      <button class="secondary" id="move">Move robot one step</button>
+      <button class="secondary" id="autoRun">▶ Auto rescue</button>
+      <button class="secondary" id="reset">Reset maze</button>
+    </div>
+
+    <div id="status" aria-live="polite">
+      Mission ready. Find a safe route to the rescue point.
+    </div>
+
+    <div class="legend">
+      <div><i style="background:#159b76"></i>Start (S)</div>
+      <div><i style="background:var(--amber)"></i>Rescue destination (R)</div>
+      <div><i style="background:var(--rose)"></i>Obstacle</div>
+      <div><i style="background:#2e4d70"></i>Cells checked by A*</div>
+      <div><i style="background:var(--sky)"></i>Safe path</div>
+      <div><i style="background:#1c5f78;box-shadow:inset 0 0 0 2px #fff"></i>Robot</div>
+    </div>
+  </aside>
+</main>
+
+<script>
+const ROWS = 10;
+const COLS = 10;
+const START = 0;
+const GOAL = ROWS * COLS - 1;
+
+let walls = new Set();
+let path = [];
+let robot = START;
+let missionComplete = false;
+let autoTimer = null;
+let explored = new Set();
+
+const grid = document.getElementById("grid");
+const statusBox = document.getElementById("status");
+const autoBtn = document.getElementById("autoRun");
+
+function setStatus(message, type) {
+  statusBox.textContent = message;
+  statusBox.className = type || "";
+}
+
+function stopAuto() {
+  if (autoTimer) {
+    clearInterval(autoTimer);
+    autoTimer = null;
+  }
+  autoBtn.textContent = "▶ Auto rescue";
+  autoBtn.classList.remove("running");
+}
+
+function updateStats() {
+  const pos = document.getElementById("robotPos");
+  const dist = document.getElementById("distance");
+  const rem = document.getElementById("remaining");
+
+  const row = Math.floor(robot / COLS) + 1;
+  const col = (robot % COLS) + 1;
+
+  pos.textContent = "R" + row + ", C" + col;
+  document.getElementById("checked").textContent =
+    explored.size > 0 ? explored.size : "--";
+
+  if (path.length === 0) {
+    dist.textContent = "--";
+    rem.textContent = "--";
+    return;
+  }
+
+  dist.textContent = (path.length - 1) + " steps";
+
+  const index = path.indexOf(robot);
+  rem.textContent = index >= 0
+    ? (path.length - 1 - index) + " steps"
+    : "--";
+}
+
+function toggleWall(i) {
+  if (i === START || i === GOAL) return;
+
+  stopAuto();
+
+  if (walls.has(i)) {
+    walls.delete(i);
+  } else {
+    walls.add(i);
+  }
+
+  path = [];
+  explored = new Set();
+  robot = START;
+  missionComplete = false;
+  drawGrid();
+  setStatus("Obstacle map updated. Calculate a new safe route.");
+}
+
+function drawGrid() {
+  grid.innerHTML = "";
+
+  for (let i = 0; i < ROWS * COLS; i++) {
+    const cell = document.createElement("div");
+    cell.className = "cell";
+    cell.tabIndex = 0;
+    cell.setAttribute("role", "button");
+
+    const row = Math.floor(i / COLS) + 1;
+    const col = (i % COLS) + 1;
+    let label = "Row " + row + ", column " + col;
+
+    if (walls.has(i)) {
+      cell.classList.add("wall");
+      label += ", obstacle";
+    }
+    if (explored.has(i) && i !== START && i !== GOAL) {
+      cell.classList.add("seen");
+    }
+    if (path.includes(i) && !walls.has(i) && i !== START && i !== GOAL) {
+      cell.classList.remove("seen");
+      cell.classList.add("path");
+    }
+
+    if (i === START) {
+      cell.classList.add("start");
+      cell.textContent = "S";
+      label += ", start";
+    }
+
+    if (i === GOAL) {
+      cell.classList.add("goal");
+      cell.textContent = "R";
+      label += ", rescue destination";
+    }
+
+    if (i === robot) {
+      cell.classList.add("robot");
+      cell.textContent = "🤖";
+      label += ", robot is here";
+    }
+
+    cell.setAttribute("aria-label", label);
+
+    cell.addEventListener("click", () => toggleWall(i));
+    cell.addEventListener("keydown", (e) => {
+      if (e.key === "Enter" || e.key === " ") {
+        e.preventDefault();
+        toggleWall(i);
+      }
+    });
+
+    grid.appendChild(cell);
+  }
+  updateStats();
+}
+
+// A* search: f(n) = g(n) + h(n), with Manhattan distance as the heuristic.
+function findShortestPath() {
+  const goalRow = Math.floor(GOAL / COLS);
+  const goalCol = GOAL % COLS;
+  const h = (n) =>
+    Math.abs(Math.floor(n / COLS) - goalRow) + Math.abs((n % COLS) - goalCol);
+
+  const open = [START];
+  const g = new Map([[START, 0]]);
+  const previous = new Map([[START, null]]);
+  const closed = new Set();
+
+  while (open.length > 0) {
+    // Pick the open cell with the lowest f; break ties with lower h.
+    let best = 0;
+    for (let k = 1; k < open.length; k++) {
+      const fk = g.get(open[k]) + h(open[k]);
+      const fb = g.get(open[best]) + h(open[best]);
+      if (fk < fb || (fk === fb && h(open[k]) < h(open[best]))) best = k;
+    }
+
+    const current = open.splice(best, 1)[0];
+    if (closed.has(current)) continue;
+    closed.add(current);
+
+    if (current === GOAL) break;
+
+    const candidates = [
+      current - COLS,
+      current + COLS,
+      current % COLS > 0 ? current - 1 : -1,
+      current % COLS < COLS - 1 ? current + 1 : -1
+    ];
+
+    for (const next of candidates) {
+      if (next < 0 || next >= ROWS * COLS) continue;
+      if (walls.has(next) || closed.has(next)) continue;
+
+      const tentative = g.get(current) + 1;
+      if (!g.has(next) || tentative < g.get(next)) {
+        g.set(next, tentative);
+        previous.set(next, current);
+        open.push(next);
+      }
+    }
+  }
+
+  explored = closed;
+
+  if (!closed.has(GOAL)) {
+    path = [];
+    robot = START;
+    missionComplete = false;
+    drawGrid();
+    setStatus("No safe route found. Remove some obstacles and try again.", "error");
+    return;
+  }
+
+  path = [];
+  let current = GOAL;
+
+  while (current !== null) {
+    path.unshift(current);
+    current = previous.get(current);
+  }
+
+  robot = START;
+  missionComplete = false;
+  drawGrid();
+
+  setStatus(
+    "Safe route found! Distance: " + (path.length - 1) +
+    " steps. Algorithm: A* search (Manhattan heuristic). Cells checked: " +
+    explored.size + " of " + (ROWS * COLS - walls.size) + " open cells."
+  );
+}
+
+document.getElementById("find").addEventListener("click", () => {
+  stopAuto();
+  findShortestPath();
+});
+
+document.getElementById("move").addEventListener("click", () => {
+  if (path.length === 0) {
+    setStatus("First select Find shortest path.", "error");
+    return;
+  }
+
+  if (missionComplete) {
+    setStatus("Rescue complete! Reset to start again.", "success");
+    return;
+  }
+
+  const currentPosition = path.indexOf(robot);
+  const nextPosition = currentPosition + 1;
+
+  if (nextPosition >= path.length) {
+    missionComplete = true;
+    setStatus("Rescue mission complete!", "success");
+    return;
+  }
+
+  robot = path[nextPosition];
+  drawGrid();
+
+  if (robot === GOAL) {
+    missionComplete = true;
+    setStatus("Mission successful! Robot reached the rescue destination.", "success");
+  } else {
+    setStatus("Robot moving. Step " + nextPosition + " of " + (path.length - 1) + ".");
+  }
+});
+
+document.getElementById("reset").addEventListener("click", () => {
+  stopAuto();
+  walls = new Set();
+  explored = new Set();
+  path = [];
+  robot = START;
+  missionComplete = false;
+  drawGrid();
+  setStatus("Maze reset. Ready for a new rescue mission.");
+});
+
+autoBtn.addEventListener("click", () => {
+  if (autoTimer) {
+    stopAuto();
+    setStatus("Robot paused.");
+    return;
+  }
+
+  if (path.length === 0) {
+    findShortestPath();
+  }
+
+  if (path.length === 0 || missionComplete) return;
+
+  autoBtn.textContent = "⏸ Pause";
+  autoBtn.classList.add("running");
+  setStatus("Autonomous rescue started!");
+
+  autoTimer = setInterval(() => {
+    const currentPosition = path.indexOf(robot);
+    const nextPosition = currentPosition + 1;
+
+    if (nextPosition >= path.length) {
+      stopAuto();
+      missionComplete = true;
+      setStatus("Rescue mission complete!", "success");
+      return;
+    }
+
+    robot = path[nextPosition];
+    drawGrid();
+
+    if (robot === GOAL) {
+      stopAuto();
+      missionComplete = true;
+      setStatus("Rescue mission successful! Robot reached destination.", "success");
+    } else {
+      setStatus(
+        "Robot moving autonomously: " + nextPosition + "/" + (path.length - 1) + " steps."
+      );
+    }
+  }, 350);
+});
+
+drawGrid();
+</script>
+</body>
+</html>
