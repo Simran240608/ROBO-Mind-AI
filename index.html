@@ -1,0 +1,424 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>RoboMind AI - Rescue Simulator</title>
+
+<style>
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  padding: 20px;
+  font-family: Arial, sans-serif;
+  background: #0b1220;
+  color: #eef4ff;
+}
+
+
+header {
+  text-align: center;
+  margin-bottom: 24px;
+}
+
+h1 {
+  color: #65e5c0;
+  margin-bottom: 8px;
+}
+
+.subtitle {
+  color: #a8b8d0;
+}
+
+.layout {
+  max-width: 950px;
+  margin: auto;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 230px;
+  gap: 18px;
+}
+
+.panel {
+  background: #151f32;
+  border: 1px solid #2c3c56;
+  border-radius: 14px;
+  padding: 18px;
+}
+
+#grid {
+  display: grid;
+  grid-template-columns: repeat(10, minmax(0, 1fr));
+  gap: 4px;
+}
+
+.cell {
+  aspect-ratio: 1;
+  min-width: 0;
+  display: grid;
+  place-items: center;
+  border-radius: 4px;
+  background: #293750;
+  cursor: pointer;
+  font-size: clamp(10px, 2vw, 18px);
+}
+
+.start { background: #159b76; }
+.goal { background: #e9a52b; color: #171717; }
+.wall { background: #ed596e; }
+.path { background: #53c9ec; color: #071321; }
+.robot { outline: 3px solid white; outline-offset: -3px; }
+
+button {
+  width: 100%;
+  border: none;
+  border-radius: 8px;
+  padding: 12px 8px;
+  margin: 5px 0;
+  cursor: pointer;
+  font-weight: bold;
+  background: #65e5c0;
+  color: #071321;
+}
+
+button.secondary {
+  background: #35445d;
+  color: white;
+}
+
+#status {
+  margin-top: 16px;
+  padding: 12px;
+  background: #0b1220;
+  border-radius: 8px;
+  line-height: 1.5;
+  font-size: 14px;
+}
+
+.legend {
+  color: #c9d6e9;
+  font-size: 13px;
+  line-height: 2;
+}
+
+@media (max-width: 650px) {
+  .layout { grid-template-columns: 1fr; }
+  body { padding: 10px; }
+}
+.stats {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 10px;
+  margin: 15px 0;
+}
+
+.stat-card {
+  padding: 12px;
+  border-radius: 9px;
+  background: #0b1220;
+  border: 1px solid #35445d;
+}
+
+.stat-card span {
+  display: block;
+  color: #a8b8d0;
+  font-size: 12px;
+  margin-bottom: 7px;
+}
+
+.stat-card strong {
+  color: #65e5c0;
+  font-size: 20px;
+}
+</style>
+</head>
+
+<body>
+<header>
+  <h1>🤖 RoboMind AI</h1>
+  <div class="subtitle">Autonomous Disaster Rescue Simulator</div>
+</header>
+
+<main class="layout">
+  <section class="panel">
+    <h3>Rescue Mission Grid</h3>
+    <p class="subtitle">Click a cell to place or remove an obstacle.</p>
+    <div id="grid"></div>
+  </section>
+
+  <aside class="panel">
+    <h3>Mission Dashboard</h3>
+    <div class="stats">
+  <div class="stat-card">
+    <span>Robot Position</span>
+    <strong id="robotPos">Start</strong>
+  </div>
+  <div class="stat-card">
+    <span>Total Distance</span>
+    <strong id="distance">--</strong>
+  </div>
+  <div class="stat-card">
+    <span>Steps Remaining</span>
+    <strong id="remaining">--</strong>
+  </div>
+</div>
+    <button id="find">Find Shortest Path</button>
+    <button class="secondary" id="move">Move Robot</button>
+    <button id="autoRun">▶ Auto Rescue</button>
+
+    <button class="secondary" id="reset">Reset Maze</button>
+
+    <div id="status" aria-live="polite">
+      Mission ready. Find a safe route to the rescue point.
+    </div>
+
+    <hr>
+    <div class="legend">
+      🟩 S — Start<br>
+      🟨 R — Rescue destination<br>
+      🟥 — Obstacle<br>
+      🟦 — Safe path<br>
+      ⬜ — Robot position
+    </div>
+  </aside>
+</main>
+
+<script>
+const ROWS = 10;
+const COLS = 10;
+const START = 0;
+const GOAL = ROWS * COLS - 1;
+
+let walls = new Set();
+let path = [];
+let robot = START;
+let missionComplete = false;
+
+const grid = document.getElementById("grid");
+const statusBox = document.getElementById("status");
+function updateStats() {
+  const pos = document.getElementById("robotPos");
+  const dist = document.getElementById("distance");
+  const rem = document.getElementById("remaining");
+
+  const row = Math.floor(robot / COLS) + 1;
+  const col = (robot % COLS) + 1;
+
+  pos.textContent = "R" + row + ", C" + col;
+
+  if (path.length === 0) {
+    dist.textContent = "--";
+    rem.textContent = "--";
+    return;
+  }
+
+  dist.textContent = (path.length - 1) + " steps";
+
+  const index = path.indexOf(robot);
+  rem.textContent = index >= 0
+    ? (path.length - 1 - index) + " steps"
+    : "--";
+}
+
+function drawGrid() {
+  grid.innerHTML = "";
+
+  for (let i = 0; i < ROWS * COLS; i++) {
+    const cell = document.createElement("div");
+    cell.className = "cell";
+
+    if (walls.has(i)) cell.classList.add("wall");
+    if (path.includes(i) && !walls.has(i)) {
+      cell.classList.add("path");
+    }
+
+    if (i === START) {
+      cell.className = "cell start";
+      cell.textContent = "S";
+    }
+
+    if (i === GOAL) {
+      cell.className = "cell goal";
+      cell.textContent = "R";
+    }
+
+    if (i === robot) cell.classList.add("robot");
+
+    cell.addEventListener("click", () => {
+      if (i === START || i === GOAL) return;
+
+      if (walls.has(i)) {
+        walls.delete(i);
+      } else {
+        walls.add(i);
+      }
+      
+
+      path = [];
+      robot = START;
+      missionComplete = false;
+      drawGrid();
+      statusBox.textContent =
+        "Obstacle map updated. Calculate a new safe route.";
+        
+    });
+
+    grid.appendChild(cell);
+  }
+  updateStats();
+}
+
+// Breadth-First Search finds a shortest path on this grid.
+function findShortestPath() {
+  const queue = [START];
+  let head = 0;
+  const previous = new Map();
+  previous.set(START, null);
+
+  while (head < queue.length) {
+    const current = queue[head++];
+
+    if (current === GOAL) break;
+
+    const candidates = [
+      current - COLS,
+      current + COLS,
+      current % COLS > 0 ? current - 1 : -1,
+      current % COLS < COLS - 1 ? current + 1 : -1
+    ];
+
+    for (const next of candidates) {
+      if (next < 0 || next >= ROWS * COLS) continue;
+      if (walls.has(next) || previous.has(next)) continue;
+
+      previous.set(next, current);
+      queue.push(next);
+    }
+  }
+
+  if (!previous.has(GOAL)) {
+    path = [];
+    robot = START;
+    missionComplete = false;
+    drawGrid();
+    statusBox.textContent =
+      "No safe route found. Remove some obstacles and try again.";
+    return;
+  }
+
+  path = [];
+  let current = GOAL;
+
+  while (current !== null) {
+    path.unshift(current);
+    current = previous.get(current);
+  }
+
+  robot = START;
+  missionComplete = false;
+  drawGrid();
+
+  statusBox.textContent =
+    "Safe route found! Distance: " + (path.length - 1) +
+    " steps. Algorithm: BFS shortest-path search.";
+}
+
+document.getElementById("find").addEventListener("click", () => {
+  findShortestPath();
+});
+
+document.getElementById("move").addEventListener("click", () => {
+  if (path.length === 0) {
+    statusBox.textContent = "First click Find Shortest Path.";
+    return;
+  }
+
+  if (missionComplete) {
+    statusBox.textContent = "Rescue complete! Reset to start again.";
+    return;
+  }
+
+  const currentPosition = path.indexOf(robot);
+  const nextPosition = currentPosition + 1;
+
+  if (nextPosition >= path.length) {
+    missionComplete = true;
+    statusBox.textContent = "Rescue mission complete!";
+    return;
+  }
+
+  robot = path[nextPosition];
+  drawGrid();
+
+  if (robot === GOAL) {
+    missionComplete = true;
+    statusBox.textContent =
+      "Mission successful! Robot reached the rescue destination.";
+  } else {
+    statusBox.textContent =
+      "Robot moving. Step " + nextPosition +
+      " of " + (path.length - 1) + ".";
+  }
+});
+
+document.getElementById("reset").addEventListener("click", () => {
+  walls = new Set();
+  path = [];
+  robot = START;
+  missionComplete = false;
+  drawGrid();
+  statusBox.textContent = "Maze reset. Ready for a new rescue mission.";
+});
+
+drawGrid();
+let autoTimer = null;
+
+document.getElementById("autoRun").addEventListener("click", () => {
+  if (autoTimer) {
+    clearInterval(autoTimer);
+    autoTimer = null;
+    statusBox.textContent = "Robot paused.";
+    return;
+  }
+
+  if (path.length === 0) {
+    findShortestPath();
+  }
+
+  if (path.length === 0 || missionComplete) return;
+
+  statusBox.textContent = "Autonomous rescue started!";
+
+  autoTimer = setInterval(() => {
+    const currentPosition = path.indexOf(robot);
+    const nextPosition = currentPosition + 1;
+
+    if (nextPosition >= path.length) {
+      clearInterval(autoTimer);
+      autoTimer = null;
+      missionComplete = true;
+      statusBox.textContent = "Rescue mission complete!";
+      return;
+    }
+
+    robot = path[nextPosition];
+    drawGrid();
+
+    if (robot === GOAL) {
+      clearInterval(autoTimer);
+      autoTimer = null;
+      missionComplete = true;
+      statusBox.textContent =
+        "Rescue mission successful! Robot reached destination.";
+    } else {
+      statusBox.textContent =
+        "Robot moving autonomously: " +
+        nextPosition + "/" + (path.length - 1) + " steps.";
+    }
+  }, 350);
+});
+</script>
+</body>
+</html>
